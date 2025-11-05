@@ -21,8 +21,8 @@ local DEFAULT_TAGS = {
     titanforgedText = "TF",
     warforgedText = "WF",
     lightforgedText = "LF",
-    attunedText = "Attuned",
-    attunableText = "Attunable",
+    attunedText = "A",
+    attunableText = "A",
 }
 local positionOptions = {"After", "Before", "Prefix", "Sufix", "Disable"}
 local ITEM_SAMPLE_MAP = {
@@ -37,10 +37,12 @@ local ITEM_SAMPLE_MAP = {
 -- Helper function to get tag text with fallback to default
 local function GetTagText(key)
     local value = FILDB[key]
-    if value == nil or value == "" then
-        return DEFAULT_TAGS[key] or ""
+    -- Check if value exists in FILDB (even if empty string)
+    if FILDB[key] ~= nil then
+        return value
     end
-    return value
+    -- Only use default if key doesn't exist at all
+    return DEFAULT_TAGS[key] or ""
 end
 
 -- Saved variables setup in ADDON_LOADED
@@ -60,10 +62,12 @@ f:SetScript("OnEvent", function(self, event, addonName)
         if FILDB["titanforgedText"] == nil then FILDB["titanforgedText"] = "TF" end
         if FILDB["warforgedText"] == nil then FILDB["warforgedText"] = "WF" end
         if FILDB["lightforgedText"] == nil then FILDB["lightforgedText"] = "LF" end
-        if FILDB["attunedText"] == nil then FILDB["attunedText"] = "Attuned" end
-        if FILDB["attunableText"] == nil then FILDB["attunableText"] = "Attunable" end
+        if FILDB["attunedText"] == nil then FILDB["attunedText"] = "A" end
+        if FILDB["attunableText"] == nil then FILDB["attunableText"] = "A" end
         if FILDB["attunedPos"] == nil then FILDB["attunedPos"] = "After" end
         if FILDB["attunablePos"] == nil then FILDB["attunablePos"] = "After" end
+        if FILDB["useAccountAttune"] == nil then FILDB["useAccountAttune"] = false end
+        if FILDB["debugAttune"] == nil then FILDB["debugAttune"] = false end
         
         CreateSettingsPanel()
 		
@@ -157,13 +161,43 @@ local function ProcessItemLink(link, foundColoredLinks)
   FILDB["LastLink"] = newlink
   
   -- Attunement Check
-  if _G.CanAttuneItemHelper and _G.GetItemLinkAttuneProgress then
-      if CanAttuneItemHelper(itemID) == 1 then
-          local progress = GetItemLinkAttuneProgress(link)
-          if progress == 100 then
-              newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNED, GetTagText("attunedText"), FILDB["attunedPos"])
-          elseif progress >= 0 and progress < 100 then
-              newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNABLE, GetTagText("attunableText"), FILDB["attunablePos"])
+  if _G.GetItemLinkAttuneProgress then
+      local shouldCheck = false
+      local progress = nil
+      
+      -- Get item info to check if it's equippable
+      local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, 
+            itemStackCount, itemEquipLoc, itemTexture, itemSellPrice = GetItemInfo(itemID)
+      
+      -- Only check equippable items (items with an equipment slot)
+      -- This excludes crafting materials, consumables, etc.
+      local isEquippable = itemEquipLoc and itemEquipLoc ~= ""
+      
+      if isEquippable then
+          if FILDB["useAccountAttune"] then
+              -- Account attunement: Check all items, ignore CanAttuneItemHelper
+              shouldCheck = true
+              progress = GetItemLinkAttuneProgress(link)
+              if FILDB["debugAttune"] then
+                  print("Account Attune Progress for item " .. itemID .. ": " .. tostring(progress))
+              end
+          else
+              -- Character attunement: Only check items this character can attune
+              if _G.CanAttuneItemHelper and CanAttuneItemHelper(itemID) == 1 then
+                  shouldCheck = true
+                  progress = GetItemLinkAttuneProgress(link)
+                  if FILDB["debugAttune"] then
+                      print("Character Attune Progress for item " .. itemID .. ": " .. tostring(progress))
+                  end
+              end
+          end
+          
+          if shouldCheck and progress then
+              if progress == 100 then
+                  newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNED, GetTagText("attunedText"), FILDB["attunedPos"])
+              elseif progress >= 0 and progress < 100 then
+                  newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNABLE, GetTagText("attunableText"), FILDB["attunablePos"])
+              end
           end
       end
   end
@@ -485,6 +519,21 @@ function CreateSettingsPanel()
     end
     UIDropDownMenu_Initialize(attunablePosDropdown, InitializeAttunablePosDropdown)
 	
+	-- Account Attunement Checkbox
+	local accountAttuneCheckbox = CreateFrame("CheckButton", "FIL_AccountAttuneCheckbox", settingsPanel, "UICheckButtonTemplate")
+	accountAttuneCheckbox:SetPoint("TOPLEFT", 200, -350)
+	accountAttuneCheckbox:SetSize(24, 24)
+	accountAttuneCheckbox:SetChecked(FILDB["useAccountAttune"])
+	
+	local accountAttuneLabel = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	accountAttuneLabel:SetPoint("LEFT", accountAttuneCheckbox, "RIGHT", 5, 0)
+	accountAttuneLabel:SetText("Use Account Attunement")
+	
+	accountAttuneCheckbox:SetScript("OnClick", function(self)
+		FILDB["useAccountAttune"] = self:GetChecked()
+		hasChanges = true
+	end)
+	
     -- Reset Button
     local resetButton = CreateFrame("Button", "FIL_ResetButton", settingsPanel, "GameMenuButtonTemplate")
     resetButton:SetSize(120, 30)
@@ -499,10 +548,11 @@ function CreateSettingsPanel()
         FILDB["titanforgedText"] = "TF"
         FILDB["warforgedText"] = "WF"
         FILDB["lightforgedText"] = "LF"
-        FILDB["attunedText"] = "Attuned"
-        FILDB["attunableText"] = "Attunable"
+        FILDB["attunedText"] = "A"
+        FILDB["attunableText"] = "A"
         FILDB["attunedPos"] = "After"
         FILDB["attunablePos"] = "After"
+        FILDB["useAccountAttune"] = false
         
         -- Update UI elements
         UIDropDownMenu_SetText(mythicPosDropdown, "After")
@@ -515,8 +565,9 @@ function CreateSettingsPanel()
         titanforgedEditBox:SetText("TF")
         warforgedEditBox:SetText("WF")
         lightforgedEditBox:SetText("LF")
-        attunedEditBox:SetText("Attuned")
-        attunableEditBox:SetText("Attunable")
+        attunedEditBox:SetText("A")
+        attunableEditBox:SetText("A")
+        accountAttuneCheckbox:SetChecked(false)
         hasChanges = true
         print("|cff33ff99[Forged Item Links]|r: Settings reset to defaults!")
     end)
@@ -535,7 +586,7 @@ function CreateSettingsPanel()
             FILDB["attunableText"] = attunableEditBox:GetText()
             hasChanges = false  -- Reset change flag
             print("|cff33ff99[Forged Item Links]|r: Settings saved, printing samples:")
-			print("Myhtic: " .. AddTags(ITEM_SAMPLE_MAP.M))
+			print("Mythic: " .. AddTags(ITEM_SAMPLE_MAP.M))
 			print("Divine: " .. AddTags(ITEM_SAMPLE_MAP.D))
 			print("Lightforged: ".. AddTags(ITEM_SAMPLE_MAP.LF))
 			print("Mythic TitanForged: ".. AddTags(ITEM_SAMPLE_MAP.MTF))
@@ -558,9 +609,72 @@ end
 SLASH_FORGEDITEMLINKS1 = "/fil"
 SLASH_FORGEDITEMLINKS2 = "/forgeditemlinks"
 SlashCmdList["FORGEDITEMLINKS"] = function(msg)
-    if settingsPanel then
-        InterfaceOptionsFrame_OpenToCategory(settingsPanel)
+    if msg == "debug" then
+        FILDB["debugAttune"] = not FILDB["debugAttune"]
+        print("|cff33ff99[Forged Item Links]|r: Debug mode " .. (FILDB["debugAttune"] and "enabled" or "disabled"))
+    elseif msg:match("^testlink") then
+        -- Test attunement functions with the last linked item
+        local link = FILDB["LastLink"]
+        if not link then
+            print("|cff33ff99[Forged Item Links]|r: No item has been linked yet. Link an item in chat first.")
+            return
+        end
+        
+        local itemID = tonumber(link:match("|Hitem:(%d+):"))
+        print("|cff33ff99[Forged Item Links]|r: Testing with item: " .. link)
+        print("  Item ID: " .. tostring(itemID))
+        
+        if _G.CanAttuneItemHelper then
+            local canAttune = CanAttuneItemHelper(itemID)
+            print("  CanAttuneItemHelper(itemID): " .. tostring(canAttune))
+        end
+        
+        if _G.GetItemLinkAttuneProgress then
+            local progress = GetItemLinkAttuneProgress(link)
+            print("  GetItemLinkAttuneProgress(link): " .. tostring(progress))
+        end
+        
+        if _G.GetItemLinkAttuneProgressAccount then
+            local progress = GetItemLinkAttuneProgressAccount(link)
+            print("  GetItemLinkAttuneProgressAccount(link): " .. tostring(progress))
+        end
+        
+        -- Try variations with itemID instead of link
+        if _G.GetItemAttuneProgress then
+            local progress = GetItemAttuneProgress(itemID)
+            print("  GetItemAttuneProgress(itemID): " .. tostring(progress))
+        end
+        
+        if _G.GetItemAttuneProgressAccount then
+            local progress = GetItemAttuneProgressAccount(itemID)
+            print("  GetItemAttuneProgressAccount(itemID): " .. tostring(progress))
+        end
+    elseif msg == "test" then
+        -- Test what functions are available
+        print("|cff33ff99[Forged Item Links]|r: Available functions:")
+        print("  CanAttuneItemHelper: " .. tostring(_G.CanAttuneItemHelper ~= nil))
+        print("  GetItemLinkAttuneProgress: " .. tostring(_G.GetItemLinkAttuneProgress ~= nil))
+        print("  GetItemLinkAttuneProgressAccount: " .. tostring(_G.GetItemLinkAttuneProgressAccount ~= nil))
+        print("  GetItemAttuneProgress: " .. tostring(_G.GetItemAttuneProgress ~= nil))
+        print("  GetItemAttuneProgressAccount: " .. tostring(_G.GetItemAttuneProgressAccount ~= nil))
+        print("  IsItemAttuned: " .. tostring(_G.IsItemAttuned ~= nil))
+        print("  IsItemAttunedAccount: " .. tostring(_G.IsItemAttunedAccount ~= nil))
+        print("  GetAttuneProgress: " .. tostring(_G.GetAttuneProgress ~= nil))
+        print("  GetAttuneProgressAccount: " .. tostring(_G.GetAttuneProgressAccount ~= nil))
+        print("")
+        print("To test with an actual item, link an item in chat then type: /fil testlink")
+    elseif msg == "" then
+        -- Open settings panel
+        if settingsPanel then
+            InterfaceOptionsFrame_OpenToCategory(settingsPanel)
+        else
+            print("Forged Item Links: Settings panel not yet loaded.")
+        end
     else
-        print("Forged Item Links: Settings panel not yet loaded.")
+        print("|cff33ff99[Forged Item Links]|r: Unknown command. Available commands:")
+        print("  /fil - Open settings")
+        print("  /fil test - Show available functions")
+        print("  /fil testlink - Test attunement with last linked item")
+        print("  /fil debug - Toggle debug mode")
     end
 end
