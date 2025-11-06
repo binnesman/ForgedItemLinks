@@ -7,8 +7,9 @@
 
 ## 🔧 Features
 
-- Automatically adds customizable tags to linked forged and Mythic items in chat.
+- Automatically adds customizable tags to linked forged, Mythic, and Divine items in chat.
 - Settings menu to change the text and position of the tags.
+- Adds a pink [A] for attunable items, and a green [A] for attuned items.
 
 ---
 
