@@ -174,16 +174,30 @@ local function ProcessItemLink(link, foundColoredLinks)
       local isEquippable = itemEquipLoc and itemEquipLoc ~= ""
       
       if isEquippable then
+          -- Check if item can be attuned at all
+          local canAttuneCheck = -999  -- default to unknown
+          if _G.CanAttuneItemHelper then
+              canAttuneCheck = CanAttuneItemHelper(itemID)
+          end
+          
           if FILDB["useAccountAttune"] then
-              -- Account attunement: Check all items, ignore CanAttuneItemHelper
-              shouldCheck = true
-              progress = GetItemLinkAttuneProgress(link)
-              if FILDB["debugAttune"] then
-                  print("Account Attune Progress for item " .. itemID .. ": " .. tostring(progress))
+              -- Account attunement: Check all items that CAN be attuned (by anyone)
+              -- CanAttuneItemHelper values:
+              --   0 = Can't be attuned (No stats/Disabled) - SKIP THESE
+              --   1 = Can attune on this character
+              --  <0 = Can't attune on this character, but CAN be attuned by others
+              if canAttuneCheck ~= 0 then
+                  shouldCheck = true
+                  progress = GetItemLinkAttuneProgress(link)
+                  if FILDB["debugAttune"] then
+                      print("Account Attune Progress for item " .. itemID .. " (" .. (itemName or "unknown") .. "): " .. tostring(progress) .. " (CanAttune: " .. tostring(canAttuneCheck) .. ")")
+                  end
+              elseif FILDB["debugAttune"] then
+                  print("Skipping item " .. itemID .. " - Cannot be attuned (CanAttuneItemHelper = 0)")
               end
           else
               -- Character attunement: Only check items this character can attune
-              if _G.CanAttuneItemHelper and CanAttuneItemHelper(itemID) == 1 then
+              if canAttuneCheck == 1 then
                   shouldCheck = true
                   progress = GetItemLinkAttuneProgress(link)
                   if FILDB["debugAttune"] then
@@ -192,10 +206,10 @@ local function ProcessItemLink(link, foundColoredLinks)
               end
           end
           
-          if shouldCheck and progress then
+          if shouldCheck and progress and progress >= 0 then
               if progress == 100 then
                   newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNED, GetTagText("attunedText"), FILDB["attunedPos"])
-              elseif progress >= 0 and progress < 100 then
+              elseif progress < 100 then
                   newlink = BuildNewLink(newlink, color, TEXT_COLOR_MAP.ATTUNABLE, GetTagText("attunableText"), FILDB["attunablePos"])
               end
           end
@@ -263,6 +277,7 @@ for _, event in pairs({
   "CHAT_MSG_YELL",
   "CHAT_MSG_GUILD",
   "CHAT_MSG_PARTY",
+  "CHAT_MSG_PARTY_LEADER",
   "CHAT_MSG_RAID",
   "CHAT_MSG_RAID_LEADER",
   "CHAT_MSG_WHISPER",
