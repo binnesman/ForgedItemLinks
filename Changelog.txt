@@ -1,0 +1,38 @@
+LiquidAP: 4/8/25
+Release
+Updated the addon to include a settings UI
+
+-
+
+Lulleh: 20/10/25
+Added Divine items
+
+-
+
+Xayia: 28/10/25 Added Attuned/Attunable tag
+
+-
+
+Lulleh: 30/10/25
+Fixes a typo on printout (myhtic)
+Adds savedvariables for settings(acc level)
+Add an option to check for account attune (currently no Attune tag applies to Cloth when viewed from a DK)
+
+-
+
+Lulleh: 4/11/25
+Added SavedVariables to save settings properly (acc level, not char level)
+Added checkbox for acc attune, ie unusable items
+(added fix for materials, all good now)
+[Undocumented] Attunable/Attuned tag is now just "A", Green(cff33FF33) for attuned, Pink(cffFF69B4) for unattuned
+
+-
+
+Binnes: 5/11/25
+Updated readme.md to mention divine items, and updated screenshot
+
+-
+
+Lulleh: 6/11/25
+Items that has no stats or that are Disabled no longer show an Attune tag ([A]),
+Attune tag now works in party chat (found it randomly)
