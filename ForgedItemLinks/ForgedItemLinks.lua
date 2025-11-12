@@ -98,6 +98,25 @@ function GetForgeLevelFromLink(itemLink)
     return FORGE_LEVEL_MAP.BASE
 end
 
+-- Pre-cache items when tooltips are shown (helps with uncached items in chat)
+local function PreCacheItemFromTooltip(tooltip)
+    local _, itemLink = tooltip:GetItem()
+    if itemLink then
+        local itemID = tonumber(itemLink:match("|Hitem:(%d+):"))
+        if itemID then
+            -- Trigger cache by calling GetItemInfoCustom (if available) or GetItemInfo
+            local getItemFunc = _G.GetItemInfoCustom or GetItemInfo
+            getItemFunc(itemID)
+        end
+    end
+end
+
+-- Hook all tooltips to pre-cache items
+GameTooltip:HookScript("OnTooltipSetItem", PreCacheItemFromTooltip)
+ItemRefTooltip:HookScript("OnTooltipSetItem", PreCacheItemFromTooltip)
+ShoppingTooltip1:HookScript("OnTooltipSetItem", PreCacheItemFromTooltip)
+ShoppingTooltip2:HookScript("OnTooltipSetItem", PreCacheItemFromTooltip)
+
 local function GetItemColorFromLink(itemLink)
     -- Try to extract color from existing colored link first
     local colorCode = itemLink:match("^(|c%x%x%x%x%x%x%x%x)")
@@ -155,6 +174,17 @@ end
 
 local function ProcessItemLink(link, foundColoredLinks)
   local itemID = tonumber(link:match("|Hitem:(%d+):"))
+  
+  -- Try to get item info using custom function if available, otherwise fallback to standard
+  local getItemFunc = _G.GetItemInfoCustom or GetItemInfo
+  local itemName, _, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, 
+        itemStackCount, itemEquipLoc, itemTexture, itemSellPrice = getItemFunc(itemID)
+  
+  -- If item info is not available yet, return the link unchanged
+  if not itemName then
+      return link
+  end
+  
   local color = GetItemColorFromLink(link)
   local newlink = link
   if not foundColoredLinks then newlink = color .. newlink end
@@ -164,10 +194,6 @@ local function ProcessItemLink(link, foundColoredLinks)
   if _G.GetItemLinkAttuneProgress then
       local shouldCheck = false
       local progress = nil
-      
-      -- Get item info to check if it's equippable
-      local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, 
-            itemStackCount, itemEquipLoc, itemTexture, itemSellPrice = GetItemInfo(itemID)
       
       -- Only check equippable items (items with an equipment slot)
       -- This excludes crafting materials, consumables, etc.
